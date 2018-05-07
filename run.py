@@ -47,6 +47,7 @@ plist_contr_kext_path = currentDir + "/contr_plist"
 # systems="J680"
 systems = "J137"
 s = systems
+smcif_file =  str(systems) + ".csv"
 feature_dict_txt = os.path.join(currentDir, "feature_dict.txt")
 feature_on_dict_txt = os.path.join(currentDir, "feature_on_dict.txt")  # list of all features to be on
 feature_dict_plist = "feature_dict_plist"
@@ -163,6 +164,7 @@ class idle_pwr:
             try:
                 line_idlelist = line.split(":")
                 ID_index = int(line_idlelist[1].split(",")[0])  # before was: split("-")
+                MSTD_index = int(line_idlelist[1].split(",")[1].split("-")[0])
                 logging.info("ID_index: " + str(ID_index))
 
                 # line already read
@@ -218,7 +220,11 @@ class idle_pwr:
 
                     # capture smci measurement
                     if line.find("smci") != -1:
-                        self.smcif(tools_path, ID_index)
+                        self.smcif(tools_path, ID_index)  # MSTD_index
+                        os.system("sleep 5")  # wait 5 seconds to be idle
+                        self.captureSMCIF(smcif_file).send_signal(2)
+                        os.system("sleep 10")  # capture 10 seconds/samples
+                        self.captureSMCIF(smcif_file).terminate()
 
                 # run the new line
                 else:
@@ -229,7 +235,11 @@ class idle_pwr:
                     self.read_feature_line(line_idlelist[1])
 
                     if line.find("smci") != -1:
-                        self.smcif(tools_path, ID_index)
+                        self.smcif(tools_path, MSTD_index)
+                        os.system("sleep 5")  # wait 5 seconds to be idle
+                        self.captureSMCIF(smcif_file).send_signal(2)
+                        os.system("sleep 10")  # capture 10 seconds/samples
+                        self.captureSMCIF(smcif_file).terminate()
             except:
                 print ("couldnt run the Index ID " + str(ID_index))
                 logging.info("couldnt run the Index ID " + str(ID_index))
@@ -254,8 +264,7 @@ class idle_pwr:
             self.feature_set(feature_on_dict_txt)
 
         # AMDRadeon
-        elif (
-        self.detect_kext("AMDRadeon", line)):  # To do: AMDRadeon should be replaced with unit_name from json function
+        elif (self.detect_kext("AMDRadeon", line)):  # To do: AMDRadeon should be replaced with unit_name from json function
             logging.info("detect_kext (AMDRadeon)")
 
             feature_name = line.split(" ")[1]
@@ -634,6 +643,10 @@ class idle_pwr:
                             datefmt='%Y-%m-%d %H:%M:%S', filename="log.log", mode='a')
         os.system("echo " + str(admin) + "| sudo -S reboot")
 
+
+
+
+
     ###############################################
     # capture measurement with smcif
     ###############################################
@@ -642,9 +655,6 @@ class idle_pwr:
         logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO,
                             datefmt='%Y-%m-%d %H:%M:%S', filename="log.log", mode='a')
         logging.info("smcif:Started")
-        smcif_path = tools_path + "/smciflite"
-        # os.system("echo " + str(admin) +"| sudo ./smcifLite -w MSTD" + str(status_index))  #/Users/atiqa/Desktop/tools/smcifLite -w MSTD
-
         p = subprocess.check_output("echo \"atiqa\" | sudo -S ./smcifLite -w MSTD " + str(status_index), shell=True)
         m = re.match('^ERROR: Error During Cached Reading of Key REV  operation \(132\)', p)
         if (m == None):
@@ -652,6 +662,18 @@ class idle_pwr:
         os.system("sleep 15")
 
         logging.info('smcif:Finished')
+    ###############################################
+    # capture measurement with smcif
+    ###############################################
+    def captureSMCIF(self, capture_file, status_index):
+        logging.info('captureSMCIF_proc:Started')
+        capture_file = capture_file + "_" + str(status_index)
+        smcifcmd_read = "./smcifLite -csv " + capture_file + " -r PG0R PG0C PG1C PG2C PG3C PG4C IG0R IG0C IG1C IG2C IG3C VG0C TGDD MSTD GTHR"
+        smcif_proc = subprocess.Popen(smcifcmd_read, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE)
+        os.system("sleep 5")
+        logging.info('captureSMCIF_proc:Finished')
+        return smcif_proc
 
     ###############################################
     # change reg_file(scripts)
